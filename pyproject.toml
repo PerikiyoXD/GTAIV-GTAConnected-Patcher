@@ -1,0 +1,9 @@
+[project]
+name = "gtaiv_gtac_patcher_gui"
+version = "1.0"
+description = "GTA IV Retail Patch Installer for GTA Connected"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pyinstaller>=6.20.0",
+]
