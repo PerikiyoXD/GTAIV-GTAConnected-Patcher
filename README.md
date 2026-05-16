@@ -42,7 +42,7 @@ uv run gtaiv_gtac_patcher_gui.py
 
 ```bat
 uv sync
-uv run pyinstaller --onefile --windowed --name GTAIV-GTAConnected-Patcher gtaiv_gtac_patcher_gui.py
+uv run --no-project pyinstaller --onefile --windowed --name GTAIV-GTAConnected-Patcher gtaiv_gtac_patcher_gui.py
 ```
 
 Output: `dist\GTAIV-GTAConnected-Patcher.exe`

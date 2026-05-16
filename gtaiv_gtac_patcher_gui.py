@@ -15,7 +15,7 @@ Windows GUI utility that:
 No third-party Python packages required.
 Build EXE:
     uv sync
-    uv run pyinstaller --onefile --windowed --name GTAIV-GTAConnected-Patcher gtaiv_gtac_patcher_gui.py
+    uv run --no-project pyinstaller --onefile --windowed --name GTAIV-GTAConnected-Patcher gtaiv_gtac_patcher_gui.py
 """
 
 from __future__ import annotations
