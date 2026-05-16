@@ -10,11 +10,12 @@ Windows GUI utility that:
 - Validates:
     ...\Grand Theft Auto IV\GTAIV\Retail\GTAIV.exe
 - Copies that EXE path for GTA Connected -> Tools -> Game Settings.
+- Writes the Game EXE Path to the GTA Connected registry key automatically.
 
 No third-party Python packages required.
 Build EXE:
-    py -m pip install pyinstaller
-    py -m PyInstaller --onefile --windowed --name GTAIV-GTAConnected-Patcher gtaiv_gtac_patcher_gui.py
+    uv sync
+    uv run pyinstaller --onefile --windowed --name GTAIV-GTAConnected-Patcher gtaiv_gtac_patcher_gui.py
 """
 
 from __future__ import annotations
@@ -47,6 +48,9 @@ except ImportError:  # Non-Windows dev/test environment.
 APP_ID = "12210"
 APP_NAME = "Grand Theft Auto IV"
 EXPECTED_RETAIL_EXE = Path("Retail") / "GTAIV.exe"
+
+GTAC_REG_KEY = r"SOFTWARE\Jack's Mini Network\Grand Theft Auto Connected\Grand Theft Auto IV"
+GTAC_REG_VALUE = "Game EXE Path"
 
 PATCHES = {
     "1.0.8.0 recommended": "https://wiki.gtaconnected.com/downloads/Retail-1080.zip",
@@ -84,7 +88,6 @@ def looks_like_gta_root(path: Path) -> bool:
 
 
 def looks_like_gtaiv_dir(path: Path) -> bool:
-    # Complete Edition commonly has GTAIV.exe in this folder.
     return path.name.lower() == "gtaiv" or (path / "GTAIV.exe").exists()
 
 
@@ -148,6 +151,30 @@ def reg_read_value(root, subkey: str, value_name: str, wow64_flag: int = 0) -> s
     return None
 
 
+def write_gtac_registry(exe_path: Path) -> None:
+    """
+    Write the GTA Connected Game EXE Path registry value:
+      HKEY_CURRENT_USER\\SOFTWARE\\Jack's Mini Network\\Grand Theft Auto Connected\\Grand Theft Auto IV
+        Game EXE Path = <exe_path>
+    """
+    if winreg is None:
+        return
+
+    try:
+        with winreg.CreateKeyEx(
+            winreg.HKEY_CURRENT_USER,
+            GTAC_REG_KEY,
+            0,
+            winreg.KEY_WRITE,
+        ) as key:
+            winreg.SetValueEx(key, GTAC_REG_VALUE, 0, winreg.REG_SZ, str(exe_path))
+    except OSError as exc:
+        raise InstallError(
+            f"Failed to write GTA Connected registry key:\n{exc}\n\n"
+            "You may need to set the Game EXE Path manually in GTA Connected."
+        ) from exc
+
+
 def find_steam_paths_from_registry() -> list[Path]:
     if winreg is None:
         return []
@@ -180,7 +207,6 @@ def find_steam_paths_from_registry() -> list[Path]:
             if path.exists():
                 results.append(path.resolve())
 
-    # Keep order while deduping.
     seen: set[str] = set()
     deduped: list[Path] = []
     for p in results:
@@ -238,14 +264,12 @@ def parse_steam_library_paths(steam_path: Path) -> list[Path]:
     except OSError:
         return paths
 
-    # Modern lines: "path" "D:\\SteamLibrary"
     for m in re.finditer(r'"path"\s+"([^"]+)"', text, re.IGNORECASE):
         raw = m.group(1).replace(r"\\", "\\")
         p = Path(raw)
         if p.exists():
             paths.append(p.resolve())
 
-    # Older lines: "1" "D:\\SteamLibrary"
     for m in re.finditer(r'"\d+"\s+"([A-Za-z]:\\\\[^"]+)"', text):
         raw = m.group(1).replace(r"\\", "\\")
         p = Path(raw)
@@ -427,6 +451,7 @@ class App(Tk):
         self.status_var = StringVar(value="Ready.")
         self.exe_path_var = StringVar(value="")
         self.backup_existing_var = BooleanVar(value=True)
+        self.write_registry_var = BooleanVar(value=True)
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -512,6 +537,15 @@ class App(Tk):
 
         self.copy_button = ttk.Button(row3, text="Copy EXE Path", command=self._copy_exe_path, state="disabled")
         self.copy_button.pack(side=LEFT, padx=(8, 0))
+
+        row4 = ttk.Frame(install_box)
+        row4.pack(fill=X, padx=12, pady=(0, 8))
+
+        ttk.Checkbutton(
+            row4,
+            variable=self.write_registry_var,
+            text="Automatically set Game EXE Path in GTA Connected registry",
+        ).pack(side=LEFT)
 
         self.progress = ttk.Progressbar(install_box, mode="determinate")
         self.progress.pack(fill=X, padx=12, pady=(0, 8))
@@ -639,12 +673,19 @@ class App(Tk):
 
         self._worker = threading.Thread(
             target=self._install_worker,
-            args=(target, version, url, self.backup_existing_var.get()),
+            args=(target, version, url, self.backup_existing_var.get(), self.write_registry_var.get()),
             daemon=True,
         )
         self._worker.start()
 
-    def _install_worker(self, target: InstallTarget, version: str, url: str, backup_existing: bool) -> None:
+    def _install_worker(
+        self,
+        target: InstallTarget,
+        version: str,
+        url: str,
+        backup_existing: bool,
+        write_registry: bool,
+    ) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="gtaiv-gtac-patcher-"))
         zip_path = temp_dir / "patch.zip"
 
@@ -653,7 +694,6 @@ class App(Tk):
             self._queue_log(f"Downloading from: {url}")
 
             def progress(downloaded: int, total: int | None) -> None:
-                # Throttle queue noise.
                 now = time.time()
                 if now - self._last_progress_time < 0.05:
                     return
@@ -693,6 +733,13 @@ class App(Tk):
                     f"{target.retail_exe}"
                 )
 
+            if write_registry:
+                self._queue_status("Writing GTA Connected registry key...")
+                write_gtac_registry(target.retail_exe)
+                self._queue_log(
+                    f"Registry key written: HKCU\\{GTAC_REG_KEY} -> {GTAC_REG_VALUE} = {target.retail_exe}"
+                )
+
             self._queue_log("Patch installed successfully.")
             self._queue_log(f"Use this in GTA Connected Game EXE Path: {target.retail_exe}")
             self._queue.put(("done", target))
@@ -715,10 +762,17 @@ class App(Tk):
         self.copy_button.configure(state="normal")
         self._copy_exe_path(silent=True)
 
+        reg_note = (
+            "GTA Connected Game EXE Path has been set automatically via registry.\n\n"
+            if self.write_registry_var.get()
+            else "Set this path manually in GTA Connected -> Tools -> Game Settings.\n\n"
+        )
+
         messagebox.showinfo(
             "Patch installed",
             "Retail patch installed successfully.\n\n"
-            "The GTA Connected Game EXE Path has been copied to your clipboard:\n\n"
+            + reg_note
+            + "The path has also been copied to your clipboard:\n\n"
             f"{target.retail_exe}",
         )
 
