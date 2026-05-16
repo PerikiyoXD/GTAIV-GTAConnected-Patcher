@@ -21,7 +21,7 @@ GTA Connected requires a patched GTA IV executable for multiplayer compatibility
 
 ## Download
 
-A prebuilt Windows executable is available on the [releases page](https://github.com/PerikiyoXD/GTAIV-GTAConnected-Patcher/releases/download/1.0/GTAIV-GTAConnected-Patcher.exe).
+A prebuilt Windows executable is available on the [releases page](https://github.com/PerikiyoXD/GTAIV-GTAConnected-Patcher/releases/).
 
 ## Requirements
 
