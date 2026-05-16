@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 GTA IV Retail Patch Installer for GTA Connected
 
 Windows GUI utility that:
