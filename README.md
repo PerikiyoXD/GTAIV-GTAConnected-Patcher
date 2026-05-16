@@ -19,6 +19,10 @@ GTA Connected requires a patched GTA IV executable for multiplayer compatibility
 - Backing up any existing `Retail` folder before replacing it
 - Showing and copying the final `GTAIV.exe` path for use in GTA Connected
 
+## Download
+
+A prebuilt Windows executable is available on the [releases page](https://github.com/PerikiyoXD/GTAIV-GTAConnected-Patcher/releases/download/1.0/GTAIV-GTAConnected-Patcher.exe).
+
 ## Requirements
 
 - Windows
